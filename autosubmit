@@ -2,23 +2,35 @@
 
 scriptName=`basename $0`
 sleepTime=60
-#ECHO=$(which echo)
 
-usageStatement="Usage: $scriptName <submit cmd> <validation file> <validation string>"
 
+print_usage {
+    echo "Usage: $scriptName <submit cmd> <validation file> <validation string>"    
+}
+
+print_message {
+    echo -e "$1"
+}
+
+print_error {
+    print_message "$1"
+    exit 1
+}
+
+# Check arguments
 if (( $# == 1 )); then
 
     if [[ $1 == "-h" ]]; then
-	echo $usageStatement
+	print_usage 
 	exit 0
     else
-	echo $usageStatement
+	print_usage
 	exit 1
     fi
 
 elif (( $# != 3 )); then
 	
-    echo $usageStatement
+    print_usage
     exit 1
     
 else
@@ -28,19 +40,18 @@ else
     jobCheckString="$3"
 
 fi
-
+# job directory is assigned to the current one
 jobDir=`pwd`
 
-submitFile="${jobDir}/autosubmit"
-statusFile="${jobDir}/status"
+# Set autoruns and status files
+autoRunsFile="${jobDir}/autoruns"
+statusFile="${jobDir}/.status"
 
-# Read the status file in the job directory
-if [ -f ${statusFile} ]; then
-    echo "Previous 'status' file found in job directory. Please check that the previous jobs are completed and remove:"
-    echo "${statusFile}"
-    exit 1
-fi
+# Check if things have been cleaned up from a previous Read the status file in the job directory
+[ -f ${statusFile} ] &&
+print_error "Previous status file found in job directory. Check that previous jobs are complete and remove:\n${statusFile}"
 
+# Initialize the status file
 echo 0 > "${statusFile}"
 jobNumber=0
 
@@ -48,55 +59,56 @@ istop=0
 while (( $istop == 0 ))
 do
     # Read the status file in the job directory
-    if [ ! -f ${statusFile} ]; then
-	echo "File 'status' is missing from job directory. Terminating!"
-	exit 1
-    fi
+    [ ! -f ${statusFile} ] && print_error "File 'status' is missing from job directory. Terminating!"
 
+    # Read current job status
     status=`cat ${statusFile}`
 
     if (( $status == 0 )); then
 
         # Attept to start new case
-	submitTimes=`cat ${submitFile}`
+	# The the number of runs left
+	autoRuns=`cat ${autoRunsFile}`
 
-	if (( $submitTimes > 0 )); then 
+	if (( $autoRuns > 0 )); then 
 
+	    # If the validation file exists check it
 	    if [ -f ${jobDir}/${jobCheckFile} ]; then
-
+		
+		# For now just seeing if the whole word of the validation string is found. 
+		# This should be unique to successful runs
 		jobStringSearch=`grep -w "$jobCheckString" ${jobDir}/${jobCheckFile}` 
+		if [ -z "$jobStringSearch" ]; then
 
-		if [[ $jobStringSearch == "" ]]; then
-
-		    echo "Previous job not completed correctly - Terminating!"		    
-		    # Clean up
+		    # Job check string not found
+		    # Clean up and exit
 		    rm -f ${statusFile}
-		    exit 1
+		    print_error "Previous job not completed correctly - Terminating!"
 
 		fi
 
 	    else
 	    
-		echo "${jobDir}/${jobCheckFile} not found - assuming initial submission"
+		print_message "${jobDir}/${jobCheckFile} not found - assuming initial submission"
 
 	    fi
 
-	    jobNumber=`expr $jobNumber + 1`
-	    submitTimes=`expr $submitTimes - 1`
-		
 	    cd ${jobDir}
 
-	    echo $submitTimes > $submitFile
+	    # Update the job number and remaining runs
+	    jobNumber=`expr $jobNumber + 1`
+	    autoRuns=`expr $autoRuns - 1`
+	    echo $autoRuns > $autoRunsFile
 	    echo 1 > ${statusFile}
 
-	    echo "Submitting job ${jobNumber}"
+	    print_message "Submitting job ${jobNumber}"
 	    ${jobSubmitCmd}
 
 	else
-	
-	    echo "All jobs completed"
+
 	    # Cleanup
 	    rm -f ${statusFile}
+	    print_message "All jobs completed"
 	    exit 0
 
 	fi
