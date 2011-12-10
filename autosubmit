@@ -1,0 +1,110 @@
+#!/bin/bash
+
+scriptName=`basename $0`
+sleepTime=60
+ECHO=$(which echo)
+
+usageStatement="Usage: $scriptName <submit cmd> <validation file> <validation string>"
+
+if (( $# == 1 )); then
+
+    if [[ $1 == "-h" ]]; then
+	$ECHO $usageStatement
+	exit 0
+    else
+	$ECHO $usageStatement
+	exit 1
+    fi
+
+elif (( $# != 3 )); then
+	
+    $ECHO $usageStatement
+    exit 1
+    
+else
+
+    jobSubmitCmd="$1"
+    jobCheckFile="$2"
+    jobCheckString="$3"
+
+fi
+
+jobDir=`pwd`
+
+submitFile="${jobDir}/autosubmit"
+statusFile="${jobDir}/status"
+
+# Read the status file in the job directory
+if [ -f ${statusFile} ]; then
+    $ECHO "Previous 'status' file found in job directory. Please check that the previous jobs are completed and remove:"
+    $ECHO "${statusFile}"
+    exit 1
+fi
+
+$ECHO 0 > "${statusFile}"
+jobNumber=0
+
+istop=0
+while (( $istop == 0 ))
+do
+    # Read the status file in the job directory
+    if [ ! -f ${statusFile} ]; then
+	$ECHO "File 'status' is missing from job directory. Terminating!"
+	exit 1
+    fi
+
+    status=`cat ${statusFile}`
+
+    if (( $status == 0 )); then
+
+        # Attept to start new case
+	submitTimes=`cat ${submitFile}`
+
+	if (( $submitTimes > 0 )); then 
+
+	    if [ -f ${jobDir}/${jobCheckFile} ]; then
+
+		jobStringSearch=`grep -w "$jobCheckString" ${jobDir}/${jobCheckFile}` 
+
+		if [[ $jobStringSearch == "" ]]; then
+
+		    $ECHO "Previous job not completed correctly - Terminating!"		    
+		    # Clean up
+		    rm -f ${statusFile}
+		    exit 1
+
+		fi
+
+	    else
+	    
+		$ECHO "${jobDir}/${jobCheckFile} not found - assuming initial submission"
+
+	    fi
+
+	    jobNumber=`expr $jobNumber + 1`
+	    submitTimes=`expr $submitTimes - 1`
+		
+	    cd ${jobDir}
+
+	    $ECHO $submitTimes > $submitFile
+	    $ECHO 1 > ${statusFile}
+
+	    $ECHO "Submitting job ${jobNumber}"
+	    ${jobSubmitCmd}
+
+	else
+	
+	    $ECHO "All jobs completed"
+	    # Cleanup
+	    rm -f ${statusFile}
+	    exit 0
+
+	fi
+
+    fi
+
+    sleep ${sleepTime}
+
+done
+
+exit 0
