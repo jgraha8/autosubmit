@@ -4,15 +4,15 @@ scriptName=`basename $0`
 sleepTime=60
 
 
-print_usage {
+function print_usage {
     echo "Usage: $scriptName <submit cmd> <validation file> <validation string>"    
 }
 
-print_message {
+function print_message {
     echo -e "$1"
 }
 
-print_error {
+function print_error {
     print_message "$1"
     exit 1
 }
