@@ -3,6 +3,7 @@
 scriptName=$(basename $0)
 sleepTime=60
 
+
 function print_usage {
     echo "Usage: $scriptName <command> [command-args]"
     echo ""
@@ -23,61 +24,57 @@ function print_error {
     exit 1
 }
 
-# Check arguments
-if (( $# == 1 )); then
+function autosubmit_jobs {
 
-    if [[ $1 == "-h" ]]; then
-	print_usage 
-	exit 0
-    else
-	print_usage
-	exit 1
-    fi
+    # Check if things have been cleaned up from a previous Read the status file in the job directory
+    [ -d "${autoSubmitDir}" ] &&
+    print_message "Previous autosubmit directory found in job directory" &&
+    print_error "Check that previous jobs are complete and remove:\n${autoSubmitDir}"
 
-elif (( $# != 3 )); then
+    mkdir -p "${autoSubmitDir}"
+
+    # Generate submission command
+    case $QUEUE in
+
+	"pbs"|"PBS")
+	    local _submitCMD=pbs_submit #"qsub $jobSubmitScript"
+	    ;;
+	 "lsf"|"LSF")
+            local _submitCMD=lsf_submit #"${autoSubmitDir}/submit.sh ${jobSubmitScript}"
+	    ;;
+	*)
+	    print_error "Specified queue not supported"
+	    ;;
+    esac
 	
-    print_usage
-    exit 1
     
-else
+    # Update the status file
+    update_status 0
+    # #Initialize the status file
+    # echo 0 > "$statusFile"
 
-    jobSubmitCmd="$1"
-    jobCheckFile="$2"
-    jobCheckString="$3"
+    local _jobNumber=0
+    local _istop=0
 
-fi
-# job directory is assigned to the current one
-jobDir=$(pwd)
+    while (( $_istop == 0 ))
+    do
+	[ ! -d ${autoSubmitDir} ] &&
+	print_message "autosubmit directory missing from job directory" &&
+	print_error "Terminting ${scriptName} - please check for runaway jobs"
 
-# Set autoruns and status files
-autoRunsFile="${jobDir}/autoruns"
-statusFile="${jobDir}/.status"
+        # Read the status file in the job directory
+	[ ! -f ${statusFile} ] && 
+	print_message "Status file missing from job directory" &&
+	print_error "Terminating ${scriptName} - any submitted jobs will not be stopped/deleted"
 
-# Check if things have been cleaned up from a previous Read the status file in the job directory
-[ -f ${statusFile} ] &&
-print_message "Previous status file found in job directory" &&
-print_error "Check that previous jobs are complete and remove:\n${statusFile}"
+        # Read current job status
+        local _status=$(cat $statusFile)
 
-# Initialize the status file
-echo 0 > "$statusFile"
-jobNumber=0
+	if (( $_status == 0 )); then
 
-istop=0
-while (( $istop == 0 ))
-do
-    # Read the status file in the job directory
-    [ ! -f ${statusFile} ] && 
-    print_message "Status file missing from job directory" &&
-    print_error "Terminating ${scriptName} - any queued jobs will not be stopped/deleted"
-
-    # Read current job status
-    status=$(cat $statusFile)
-
-    if (( $status == 0 )); then
-
-        # Attept to start new case
-	# The the number of runs left
-	autoRuns=$(cat $autoRunsFile)
+          # Attept to start new case
+          # The the number of runs left
+	  autoRuns=$(cat $autoRunsFile)
 
 	if (( $autoRuns > 0 )); then 
 
@@ -129,5 +126,99 @@ do
     sleep ${sleepTime}
 
 done
+
+
+}
+
+######################################################################
+# Initialize global variables
+######################################################################
+RUNS=0
+QUEUE="pbs"
+jobSubmitCmd="<null>"
+jobCheckFile="<null>"
+jobCheckString="<null>"
+
+# job directory is assigned to the current one
+jobDir=$(pwd)
+autoSubmitDir="${jobDir}/.autosubmit"
+# Set autoruns and status files
+autoRunsFile="${autoSubmitDir}/autoruns"
+statusFile="${autoSubmitDir}/status"
+
+NARGS=$#
+CMD="$1"
+# Check arguments
+(( $NARGS == 0 )) && print_usage
+
+case $CMD in
+
+    "submit")
+
+	shift
+	
+	for (( i=0; i<2; i++ ))
+	do
+	    case "$1" in
+		
+		"-r")
+		    shift
+		    RUNS="$1"
+		    ;;
+		"-q")
+		    shift
+		    QUEUE="$1"
+		    ;;
+		*)
+		    print_error "submit arguments specified incorrectly (see '${scriptName} help')"
+		    ;;
+	    esac
+	done
+
+	# Check remaining number of arguments
+	(( $# != 3 )) && print_error "submit arguments specified incorrectly (see '${scriptName} help')"
+
+	jobSubmitScript="$1"
+	jobCheckFile="$2"
+	jobCheckString="$3"
+
+	submit_jobs
+	;;
+
+    "kill")
+	kill_jobs
+	;;
+    "update")
+	;;
+    "show")
+	;;
+    "help"|"-h")
+	print_usage
+	;;
+esac	    
+
+	    
+if (( $CMD == 1 )); then
+
+    if [[ $1 == "-h" ]]; then
+	print_usage 
+	exit 0
+    else
+	print_usage
+	exit 1
+    fi
+
+elif (( $# != 3 )); then
+	
+    print_usage
+    exit 1
+    
+else
+
+    jobSubmitCmd="$1"
+    jobCheckFile="$2"
+    jobCheckString="$3"
+
+fi
 
 exit 0
