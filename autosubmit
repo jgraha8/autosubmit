@@ -1,8 +1,7 @@
 #!/bin/bash
 
-scriptName=`basename $0`
+scriptName=$(basename $0)
 sleepTime=60
-
 
 function print_usage {
     echo "Usage: $scriptName <submit cmd> <validation file> <validation string>"    
@@ -41,7 +40,7 @@ else
 
 fi
 # job directory is assigned to the current one
-jobDir=`pwd`
+jobDir=$(pwd)
 
 # Set autoruns and status files
 autoRunsFile="${jobDir}/autoruns"
@@ -49,65 +48,69 @@ statusFile="${jobDir}/.status"
 
 # Check if things have been cleaned up from a previous Read the status file in the job directory
 [ -f ${statusFile} ] &&
-print_error "Previous status file found in job directory. Check that previous jobs are complete and remove:\n${statusFile}"
+print_message "Previous status file found in job directory" &&
+print_error "Check that previous jobs are complete and remove:\n${statusFile}"
 
 # Initialize the status file
-echo 0 > "${statusFile}"
+echo 0 > "$statusFile"
 jobNumber=0
 
 istop=0
 while (( $istop == 0 ))
 do
     # Read the status file in the job directory
-    [ ! -f ${statusFile} ] && print_error "File 'status' is missing from job directory. Terminating!"
+    [ ! -f ${statusFile} ] && 
+    print_message "Status file missing from job directory" &&
+    print_error "Terminating ${scriptName} - any queued jobs will not be stopped/deleted"
 
     # Read current job status
-    status=`cat ${statusFile}`
+    status=$(cat $statusFile)
 
     if (( $status == 0 )); then
 
         # Attept to start new case
 	# The the number of runs left
-	autoRuns=`cat ${autoRunsFile}`
+	autoRuns=$(cat $autoRunsFile)
 
 	if (( $autoRuns > 0 )); then 
 
 	    # If the validation file exists check it
-	    if [ -f ${jobDir}/${jobCheckFile} ]; then
+	    if [ -f "${jobDir}/${jobCheckFile}" ]; then
 		
 		# For now just seeing if the whole word of the validation string is found. 
 		# This should be unique to successful runs
-		jobStringSearch=`grep -w "$jobCheckString" ${jobDir}/${jobCheckFile}` 
+		jobStringSearch=$(grep -w "$jobCheckString" "${jobDir}/${jobCheckFile}")
 		if [ -z "$jobStringSearch" ]; then
 
 		    # Job check string not found
 		    # Clean up and exit
 		    rm -f ${statusFile}
-		    print_error "Previous job not completed correctly - Terminating!"
+		    print_error "Previous job not completed correctly - terminating ${scriptName}!"
 
 		fi
 
 	    else
 	    
-		print_message "${jobDir}/${jobCheckFile} not found - assuming initial submission"
+		print_message "${jobCheckFile} not found in job directory - assuming initial submission"
 
 	    fi
 
-	    cd ${jobDir}
+	    # Move to the job directory
+	    cd $jobDir
 
 	    # Update the job number and remaining runs
-	    jobNumber=`expr $jobNumber + 1`
-	    autoRuns=`expr $autoRuns - 1`
-	    echo $autoRuns > $autoRunsFile
-	    echo 1 > ${statusFile}
+	    jobNumber=$(( jobNumber + 1 ))
+	    autoRuns=$(( autoRuns - 1 ))
+	    echo $autoRuns > "$autoRunsFile"
+	    echo 1 > "$statusFile"
 
-	    print_message "Submitting job ${jobNumber}"
-	    ${jobSubmitCmd}
+	    print_message "Submitting job $jobNumber"
+	    $jobSubmitCmd
 
 	else
 
 	    # Cleanup
-	    rm -f ${statusFile}
+	    rm -f "$statusFile"
 	    print_message "All jobs completed"
 	    exit 0
 
@@ -115,6 +118,7 @@ do
 
     fi
 
+    # Take a power nap
     sleep ${sleepTime}
 
 done
