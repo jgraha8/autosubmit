@@ -4,7 +4,14 @@ scriptName=$(basename $0)
 sleepTime=60
 
 function print_usage {
-    echo "Usage: $scriptName <submit cmd> <validation file> <validation string>"    
+    echo "Usage: $scriptName <command> [command-args]"
+    echo ""
+    echo "Commands:"
+    echo "  submit"
+    echo "  kill"
+    echo "  update" 
+    echo "  show"
+    echo "  -r <runs> -q <queue type> <job script> <validation file> <validation string>"    
 }
 
 function print_message {
