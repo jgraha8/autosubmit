@@ -81,9 +81,10 @@ function lsf_kill {
 function create_lsf_submit_script {
     (echo '#!/bin/bash'
      echo "id=\$( bsub < ${jobSubmitScript} )"
-     echo "retval=\$?"
-     echo "echo \$retval > ${lsfSubmitScript}.exit"
-     echo "echo \$id | cut -f2 -d ' ' | sed -i 's/[^0-9]//g'") > ${lsfSubmitScript}
+     echo "echo \$? > ${lsfSubmitScript}.exit"
+     echo "echo \$id | cut -f2 -d ' '" > ${lsfSubmitScript}.id
+     echo "sed 's/[^0-9]//g' ${lsfSubmitScript}.id"
+     echo "rm -f ${lsfSubmitScript}.id") > ${lsfSubmitScript}
     chmod +x ${lsfSubmitScript}
 }
 
@@ -517,7 +518,7 @@ case $CMD in
 		;;
 
 	    *)
-		print_error "show arguments specified incorrectly (see '${scriptName} help')"
+		print_error "show arguments specified incorrectly ( see '${scriptName} help')"
 		;;
 	esac
 
@@ -527,7 +528,11 @@ case $CMD in
 
     "help"|"-h")
 	print_usage
-	;;
+        ;;
+
+     *) 
+         print_usage
+         ;;
 esac	    
 
 exit 0
