@@ -26,6 +26,7 @@
 SCRIPTNAME=$(basename $0)
 AUTOSUBMIT=$(readlink -f $0)
 SLEEPTIME=10
+SPINSLEEPTIME=$(( 0.01 * SLEEPTIME ))
 
 function print_usage {
     echo "Usage: $SCRIPTNAME <command> [command-args]"
@@ -142,68 +143,81 @@ function cleanup_on_error {
     rm -f ${statusFile}
     remove_status_update
     exit_autosubmit_jobs
+    return $?
 }
 
 function cleanup_on_complete {
     rm -rf $autoSubmitDir
     remove_status_update
     exit_autosubmit_jobs
+    return $?
 }
 
 function cleanup_on_kill {
     cleanup_on_error
+    return $?
 }
 
 function get_jobid {
     local _jobid=$(cat ${jobIDFile})
     echo $_jobid
+    return $?
 }
 function update_jobid {
     echo "$1" > ${jobIDFile}
+    return $?
 }
 
 function get_status {
     local _status=$(cat ${statusFile})
     echo $_status
+    return $?
 }
 function update_status {
     echo "$1" > $statusFile
+    return $?
 }
 
 function get_autoruns {
     local _autoruns=$(cat ${autoRunsFile})
     echo $_autoruns
+    return $?
 }
 function update_autoruns {
 
     echo "$1" > $autoRunsFile
+    return $?
 }
 
-function apply_lock {
-    touch "$1"
-}
-
-function apply_unlock {
-    rm -f "$1"
-}
-
-function enter_spin_lock {
-    while [[ -f "$1" ]]
+function enter_spinlock {
+    # Set noclobber flag to get atomic 'touch' operation
+    set -o noclobber
+    while (( $( ( echo 1 > ${spinLockFile} ) &> /dev/null; echo $? ) != 0 ))
     do
-	sleep 0.1
+	sleep ${SPINSLEEPTIME}
     done
+    set +o noclobber
+    return 0
+}
+
+function exit_spinlock {
+    # Remove lock
+     rm -f ${spinLockFile}
+     return $?
 }
 
 function enter_autosubmit_jobs {
     touch ${autoSubmitJobsFile}
+    return $?
 }
 function exit_autosubmit_jobs {
     rm -f ${autoSubmitJobsFile}
+    return $?
 }
 function check_autosubmit_jobs {
     [ ! -f ${autoSubmitJobsFile} ] &&
     print_error "No jobs are currently submitted - exiting"
-
+    return 0
 }
 ######################################################################
 # COMMAND FUNCTIONS                                                  #
@@ -223,9 +237,9 @@ function autosubmit_jobs {
     # Let others know we are entering autosubmission
     enter_autosubmit_jobs
 
-    # Go ahead and unlock everything since locks may remain on terminated cases
-    apply_unlock ${lockFileA}
-    apply_unlock ${lockFileB}
+    # Go ahead and unlock everything since locks may remain on
+    # terminated cases
+    exit_spinlock
 
     # Generate submission command
     case $queueType in
@@ -272,12 +286,10 @@ function autosubmit_jobs {
 	print_error "Terminating ${SCRIPTNAME} - submitted job with $queueType id $(get_jobid) may still be queued/running"
 
 	# Lock others from changing external values
-	apply_lock ${lockFileA}
-
 	# Perform spinlock to try to avoid race condition with status
 	# and autoruns updates from multiple sources
 	# Wait till others have finished
-	enter_spin_lock ${lockFileB}
+	enter_spinlock
 
         # Read current job status
         local _status=$(get_status)
@@ -329,9 +341,9 @@ function autosubmit_jobs {
 
 		print_message "Submitted $queueType job ${_jobID} ($_jobNumber of $autoRuns)"
 		
-		# Unlock and sleep so that if others are spinning they
+		# Unlock and so that if others are spinning they
 		# have time to apply their lock
-		apply_unlock ${lockFileA} && sleep 1
+		exit_spinlock
 
 	    else
 
@@ -351,9 +363,8 @@ function autosubmit_jobs {
 
 	else 
 	
-            # Unlock and sleep so that if others are spinning they
-	    # have time to apply their lock
-	    apply_unlock ${lockFileA} && sleep 1
+            # Unlock critical section
+	    exit_spinlock
 
 	fi
 
@@ -392,9 +403,7 @@ function kill_jobs {
     esac
 
     # Spin till released by autosubmit_jobs
-    enter_spin_lock ${lockFileA}
-    # Go ahead and apply the lock
-    apply_lock ${lockFileB}
+    enter_spinlock
 
     # Update autoruns to 0
     update_autoruns 0
@@ -406,7 +415,7 @@ function kill_jobs {
     update_status 2
 
     # Now unlock 
-    apply_unlock ${lockFileB}
+    exit_spinlock
 
     exit 0
 
@@ -433,10 +442,8 @@ statusFile="${autoSubmitDir}/status"
 jobIDFile="${autoSubmitDir}/jobid"
 autoSubmitConfig="${autoSubmitDir}/config"
 
-
-# Set lock files
-lockFileA="${autoSubmitDir}/lock.a"
-lockFileB="${autoSubmitDir}/lock.b"
+# Set lock file
+spinLockFile="${autoSubmitDir}/lock"
 
 #Set lsf submission script
 lsfSubmitScript="${autoSubmitDir}/lsfsubmit.sh"
@@ -498,10 +505,8 @@ case $CMD in
         # Make sure autosubmit_jobs is actually running
 	check_autosubmit_jobs
 
-        # Spin till released by autosubmit_jobs
-        enter_spin_lock ${lockFileA}
-        # Go ahead and apply the lock
-        apply_lock ${lockFileB}
+        # Spin till released
+        enter_spinlock
 	
 	arg="$1"
 	case "$arg" in
@@ -515,12 +520,14 @@ case $CMD in
 		update_status "$1"
 		;;
 	    *)
-		apply_unlock ${lockFileB}
+		exit_spinlock
 		print_error "update arguments specified incorrectly (see '${SCRIPTNAME} help')"
 		;;
 	esac
 
-	apply_unlock ${lockFileB}
+	# Unlock
+	exit_spinlock
+
 	exit 0
 	;;
 
@@ -547,7 +554,6 @@ case $CMD in
 	esac
 
 	exit 0
-
 	;;
 
     "help"|"-h")
