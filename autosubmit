@@ -23,13 +23,12 @@
 #
 ############################################################################
 
-scriptName=$(basename $0)
-sleepTime=10
-
-autoSubmitExe=$(readlink -f $0)
+SCRIPTNAME=$(basename $0)
+AUTOSUBMIT=$(readlink -f $0)
+SLEEPTIME=10
 
 function print_usage {
-    echo "Usage: $scriptName <command> [command-args]"
+    echo "Usage: $SCRIPTNAME <command> [command-args]"
     echo "Commands:"
     echo "  submit -r <runs> -q <queue type> <job script> <validation file> <validation string>"
     echo " "
@@ -119,7 +118,7 @@ function create_lsf_submit_script {
 function append_status_update {
 
     (echo '#ADDED BY AUTOSUBMIT - DO NOT REMOVE'
-    echo "${autoSubmitExe} update -s 0") >> ${jobSubmitScript}
+    echo "${AUTOSUBMIT} update -s 0") >> ${jobSubmitScript}
 }
 
 function remove_status_update {
@@ -129,7 +128,7 @@ function remove_status_update {
     do
 	sed -i "$n d" ${jobSubmitScript}
     done
-    for n in $(grep -n -w "${autoSubmitExe} update -s 0" ${jobSubmitScript} | cut -f1 -d ':' | sort -n -r )
+    for n in $(grep -n -w "${AUTOSUBMIT} update -s 0" ${jobSubmitScript} | cut -f1 -d ':' | sort -n -r )
     do
 	sed -i "$n d" ${jobSubmitScript}
     done
@@ -264,13 +263,13 @@ function autosubmit_jobs {
 	[ ! -d ${autoSubmitDir} ] &&
 	cleanup_on_error &&
 	print_message "autosubmit directory disapeared from job directory" &&
-	print_error "Terminting ${scriptName} - please check for runaway jobs"
+	print_error "Terminting ${SCRIPTNAME} - please check for runaway jobs"
 
         # Read the status file in the job directory
 	[ ! -f ${statusFile} ] && 
 	cleanup_on_error && 
 	print_message "Status file missing from job directory" &&
-	print_error "Terminating ${scriptName} - submitted job with $queueType id $(get_jobid) may still be queued/running"
+	print_error "Terminating ${SCRIPTNAME} - submitted job with $queueType id $(get_jobid) may still be queued/running"
 
 	# Lock others from changing external values
 	apply_lock ${lockFileA}
@@ -359,7 +358,7 @@ function autosubmit_jobs {
 	fi
 
         # Take a power nap
-	sleep ${sleepTime}
+	sleep ${SLEEPTIME}
 
     done
 
@@ -369,7 +368,7 @@ function kill_jobs {
 
     [ ! -d ${autoSubmitDir} ] &&
     print_message "autosubmit directory disapeared from job directory" &&
-    print_error "Terminting ${scriptName} - please check for runaway jobs"
+    print_error "Terminting ${SCRIPTNAME} - please check for runaway jobs"
 
     # Read the status file in the job directory
     [ ! -f ${statusFile} ] && 
@@ -467,7 +466,7 @@ case $CMD in
 		    queueType="$1"
 		    ;;
 		*)
-		    print_error "submit arguments specified incorrectly (see '${scriptName} help')"
+		    print_error "submit arguments specified incorrectly (see '${SCRIPTNAME} help')"
 		    ;;
 	    esac
 
@@ -476,7 +475,7 @@ case $CMD in
 	done
 	
 	# Check remaining number of arguments
-	(( $# != 3 )) && print_error "submit arguments specified incorrectly (see '${scriptName} help')"
+	(( $# != 3 )) && print_error "submit arguments specified incorrectly (see '${SCRIPTNAME} help')"
 	
 	jobSubmitScript="$1"
 	jobCheckFile="$2"
@@ -517,7 +516,7 @@ case $CMD in
 		;;
 	    *)
 		apply_unlock ${lockFileB}
-		print_error "update arguments specified incorrectly (see '${scriptName} help')"
+		print_error "update arguments specified incorrectly (see '${SCRIPTNAME} help')"
 		;;
 	esac
 
@@ -543,7 +542,7 @@ case $CMD in
 		;;
 
 	    *)
-		print_error "show arguments specified incorrectly ( see '${scriptName} help')"
+		print_error "show arguments specified incorrectly ( see '${SCRIPTNAME} help')"
 		;;
 	esac
 
