@@ -26,7 +26,7 @@
 SCRIPTNAME=$(basename $0)
 AUTOSUBMIT=$(readlink -f $0)
 SLEEPTIME=10
-SPINSLEEPTIME=$(( 0.01 * SLEEPTIME ))
+SPINSLEEPTIME=0.1
 
 function print_usage {
     echo "Usage: $SCRIPTNAME <command> [command-args]"
@@ -194,7 +194,8 @@ function enter_spinlock {
     set -o noclobber
     while (( $( ( echo 1 > ${spinLockFile} ) &> /dev/null; echo $? ) != 0 ))
     do
-	sleep ${SPINSLEEPTIME}
+	true
+#	sleep ${SPINSLEEPTIME}
     done
     set +o noclobber
     return 0
