@@ -26,7 +26,6 @@
 SCRIPTNAME=$(basename $0)
 AUTOSUBMIT=$(readlink -f $0)
 SLEEPTIME=10
-SPINSLEEPTIME=0.1
 
 function print_usage {
     echo "Usage: $SCRIPTNAME <command> [command-args]"
@@ -48,6 +47,8 @@ function print_usage {
     echo " "
     echo "    Update information regarding current series of jobs" 
     echo "    -r <runs>               Remaining number of runs to resubmit"
+    echo "    -s <status>             Specify status running jobs (used for kill and job completions signal)"
+    echo "                            Don't use this option unless you know what you are doing"
     echo " "
     echo "  show  { -r | -j }"
     echo " "
@@ -116,6 +117,7 @@ function create_lsf_submit_script {
 #######################################################################
 # JOB SUBMISSION SCRIPT MODS                                          #
 #######################################################################
+
 function append_status_update {
 
     (echo '#ADDED BY AUTOSUBMIT - DO NOT REMOVE'
@@ -139,6 +141,7 @@ function remove_status_update {
 ######################################################################
 # CLEANUP FUNCTIONS                                                  #
 ######################################################################
+
 function cleanup_on_error {
     rm -f ${statusFile}
     remove_status_update
@@ -189,6 +192,11 @@ function update_autoruns {
     return $?
 }
 
+
+######################################################################
+# SPINLOCK FUNCTIONS                                                 #
+######################################################################
+
 function enter_spinlock {
     # Set noclobber flag to get atomic 'touch' operation
     set -o noclobber
@@ -220,6 +228,7 @@ function check_autosubmit_jobs {
     print_error "No jobs are currently submitted - exiting"
     return 0
 }
+
 ######################################################################
 # COMMAND FUNCTIONS                                                  #
 ######################################################################
