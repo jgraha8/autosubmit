@@ -26,6 +26,7 @@
 scriptName=$(basename $0)
 sleepTime=10
 
+autoSubmitExe=$(readlink -f $0)
 
 function print_usage {
     echo "Usage: $scriptName <command> [command-args]"
@@ -53,6 +54,7 @@ function print_usage {
     echo "    Show information regarding current series of jobs"
     echo "    -r                      See number of remaining jobs to be resubmitted"
     echo "    -j                      Get the current job ID that is queued/running"
+    exit 0
 }
 
 function print_message {
@@ -68,7 +70,7 @@ function write_config_file {
     (echo jobSubmitScript=\""${jobSubmitScript}"\"
     echo jobCheckFile=\""${jobCheckFile}"\"
     echo jobCheckString=\""${jobCheckString}"\"
-    echo QUEUE=\""${QUEUE}"\") > ${autoSubmitConfig}
+    echo queueType=\""${queueType}"\") > ${autoSubmitConfig}
 }
 
 #######################################################################
@@ -117,7 +119,7 @@ function create_lsf_submit_script {
 function append_status_update {
 
     (echo '#ADDED BY AUTOSUBMIT - DO NOT REMOVE'
-    echo 'autosubmit update -s 0') >> ${jobSubmitScript}
+    echo "${autoSubmitExe} update -s 0") >> ${jobSubmitScript}
 }
 
 function remove_status_update {
@@ -127,7 +129,7 @@ function remove_status_update {
     do
 	sed -i "$n d" ${jobSubmitScript}
     done
-    for n in $(grep -n -w 'autosubmit update -s 0' ${jobSubmitScript} | cut -f1 -d ':' | sort -n -r )
+    for n in $(grep -n -w "${autoSubmitExe} update -s 0" ${jobSubmitScript} | cut -f1 -d ':' | sort -n -r )
     do
 	sed -i "$n d" ${jobSubmitScript}
     done
@@ -227,15 +229,15 @@ function autosubmit_jobs {
     apply_unlock ${lockFileB}
 
     # Generate submission command
-    case $QUEUE in
+    case $queueType in
 
 	"pbs"|"PBS")
 	    # Make sure all caps
-	    QUEUE="PBS"
+	    queueType="PBS"
 	    local _submitJob=pbs_submit
 	    ;;
 	"lsf"|"LSF")
-	    QUEUE="LSF"
+	    queueType="LSF"
             local _submitJob=lsf_submit
 	    create_lsf_submit_script
 	    ;;
@@ -247,7 +249,7 @@ function autosubmit_jobs {
     # Append autosubmit status update to job script 
     append_status_update
     # Initialize autoruns file
-    update_autoruns $AUTORUNS
+    update_autoruns $autoRuns
     # Initialize the status file
     update_status 0
     # Now write configuration (global definitions)
@@ -268,7 +270,7 @@ function autosubmit_jobs {
 	[ ! -f ${statusFile} ] && 
 	cleanup_on_error && 
 	print_message "Status file missing from job directory" &&
-	print_error "Terminating ${scriptName} - submitted job with $QUEUE id $(get_jobid) may still be queued/running"
+	print_error "Terminating ${scriptName} - submitted job with $queueType id $(get_jobid) may still be queued/running"
 
 	# Lock others from changing external values
 	apply_lock ${lockFileA}
@@ -314,7 +316,7 @@ function autosubmit_jobs {
                 # Update the job number and remaining runs
 		local _jobNumber=$(( _jobNumber + 1 ))
 		_autoRuns=$(( _autoRuns - 1 ))
-		AUTORUNS=$(( _jobNumber + _autoRuns ))
+		autoRuns=$(( _jobNumber + _autoRuns ))
 
 		update_autoruns $_autoRuns
 		update_status 1
@@ -322,11 +324,11 @@ function autosubmit_jobs {
 		local _jobID=$( $_submitJob )
 		[[ $_jobID -eq -1 || -z $_jobID ]] && 
 		cleanup_on_error &&
-		print_error "Unable to start $QUEUE job"
+		print_error "Unable to start $queueType job"
 
 		update_jobid $_jobID
 
-		print_message "Submitted $QUEUE job ${_jobID} ($_jobNumber of $AUTORUNS)"
+		print_message "Submitted $queueType job ${_jobID} ($_jobNumber of $autoRuns)"
 		
 		# Unlock and sleep so that if others are spinning they
 		# have time to apply their lock
@@ -377,7 +379,7 @@ function kill_jobs {
     source ${autoSubmitConfig}
     
     # Generate submission command
-    case $QUEUE in
+    case $queueType in
 
 	"pbs"|"PBS")
 	    local _killJob=pbs_kill
@@ -399,7 +401,7 @@ function kill_jobs {
     update_autoruns 0
 
     # Kill running job
-    $_killJob $(get_jobid) && print_message "Stopped submitted $QUEUE job $(get_jobid)"
+    $_killJob $(get_jobid) && print_message "Stopped submitted $queueType job $(get_jobid)"
 
     # Update to kill status
     update_status 2
@@ -414,8 +416,8 @@ function kill_jobs {
 ######################################################################
 # Initialize global variables
 ######################################################################
-RUNS=0
-QUEUE="pbs"
+autoRuns=0
+queueType="pbs"
 
 jobSubmitScript="<null>"
 jobCheckFile="<null>"
@@ -458,11 +460,11 @@ case $CMD in
 		
 		"-r")
 		    shift
-		    AUTORUNS="$1"
+		    autoRuns="$1"
 		    ;;
 		"-q")
 		    shift
-		    QUEUE="$1"
+		    queueType="$1"
 		    ;;
 		*)
 		    print_error "submit arguments specified incorrectly (see '${scriptName} help')"
