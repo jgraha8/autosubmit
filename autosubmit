@@ -6,13 +6,30 @@ sleepTime=10
 
 function print_usage {
     echo "Usage: $scriptName <command> [command-args]"
-    echo ""
     echo "Commands:"
-    echo "  submit"
-    echo "  kill"
-    echo "  update" 
-    echo "  show"
-    echo "  -r <runs> -q <queue type> <job script> <validation file> <validation string>"    
+    echo "  submit -r <runs> -q <queue type> <job script> <validation file> <validation string>"
+    echo " "
+    echo "    Submit jobs and setup automatic resubmission"
+    echo "    -r <runs>               Number of jobs to run"
+    echo "    -q <queue type>         Type of queue that jobs will be submitted to. Supported ones"
+    echo "                            PBS (or pbs) and LSF (or lsf)"
+    echo "    <job script>            Job script to be sent to queue"
+    echo "    <validation file>       File that contains a message upon successful completion of the job"
+    echo "    <valdiation string>     String or message that should be contained in the"
+    echo "                            <validation file> upon successfull completion of the job"
+    echo " "
+    echo "  kill                      Kill current submitted job and all subsequent submissions"
+    echo " "
+    echo "  update -r <runs>"
+    echo " "
+    echo "    Update information regarding current series of jobs" 
+    echo "    -r <runs>               Remaining number of runs to resubmit"
+    echo " "
+    echo "  show  { -r | -j }"
+    echo " "
+    echo "    Show information regarding current series of jobs"
+    echo "    -r                      See number of remaining jobs to be resubmitted"
+    echo "    -j                      Get the current job ID that is queued/running"
 }
 
 function print_message {
@@ -31,6 +48,9 @@ function write_config_file {
     echo QUEUE=\""${QUEUE}"\") > ${autoSubmitConfig}
 }
 
+#######################################################################
+# QUEUE FUNCTIONS                                                     #
+#######################################################################
 function pbs_submit {
     
     local _id=$(qsub "${jobSubmitScript}")
@@ -59,6 +79,9 @@ function create_lsf_submit_script {
      echo "\$id" ) > ${lsfSubmitScript}
 }
 
+#######################################################################
+# JOB SUBMISSION SCRIPT MODS                                          #
+#######################################################################
 function append_status_update {
 
     (echo '#ADDED BY AUTOSUBMIT - DO NOT REMOVE'
@@ -70,11 +93,11 @@ function remove_status_update {
     local n
     for n in $(grep -n -w '#ADDED BY AUTOSUBMIT - DO NOT REMOVE' ${jobSubmitScript} | cut -f1 -d ':' | sort -n -r )
     do
-	sed -i.tmp "$n d" ${jobSubmitScript}
+	sed -i "$n d" ${jobSubmitScript}
     done
     for n in $(grep -n -w 'autosubmit update -s 0' ${jobSubmitScript} | cut -f1 -d ':' | sort -n -r )
     do
-	sed -i.tmp "$n d" ${jobSubmitScript}
+	sed -i "$n d" ${jobSubmitScript}
     done
 
 }
@@ -85,11 +108,13 @@ function remove_status_update {
 function cleanup_on_error {
     rm -f ${statusFile}
     remove_status_update
+    exit_autosubmit_jobs
 }
 
 function cleanup_on_complete {
     rm -rf $autoSubmitDir
     remove_status_update
+    exit_autosubmit_jobs
 }
 
 function cleanup_on_kill {
@@ -117,16 +142,36 @@ function get_autoruns {
     echo $_autoruns
 }
 function update_autoruns {
+
     echo "$1" > $autoRunsFile
 }
 
 function apply_lock {
-    touch ${spinLockFile}
-}
-function apply_unlock {
-    rm -f ${spinLockFile}
+    touch "$1"
 }
 
+function apply_unlock {
+    rm -f "$1"
+}
+
+function enter_spin_lock {
+    while [[ -f "$1" ]]
+    do
+	sleep 0.1
+    done
+}
+
+function enter_autosubmit_jobs {
+    touch ${autoSubmitJobsFile}
+}
+function exit_autosubmit_jobs {
+    rm -f ${autoSubmitJobsFile}
+}
+function check_autosubmit_jobs {
+    [ ! -f ${autoSubmitJobsFile} ] &&
+    print_error "No jobs are currently submitted - exiting"
+
+}
 ######################################################################
 # COMMAND FUNCTIONS                                                  #
 ######################################################################
@@ -142,13 +187,23 @@ function autosubmit_jobs {
     # Create autosubmit directory
     mkdir -p "${autoSubmitDir}"
 
+    # Let others know we are entering autosubmission
+    enter_autosubmit_jobs
+
+    # Go ahead and unlock everything since locks may remain on terminated cases
+    apply_unlock ${lockFileA}
+    apply_unlock ${lockFileB}
+
     # Generate submission command
     case $QUEUE in
 
 	"pbs"|"PBS")
+	    # Make sure all caps
+	    QUEUE="PBS"
 	    local _submitJob=pbs_submit
 	    ;;
 	"lsf"|"LSF")
+	    QUEUE="LSF"
             local _submitJob=lsf_submit
 	    create_lsf_submit_file
 	    ;;
@@ -173,20 +228,23 @@ function autosubmit_jobs {
     do
 
 	[ ! -d ${autoSubmitDir} ] &&
+	cleanup_on_error &&
 	print_message "autosubmit directory disapeared from job directory" &&
 	print_error "Terminting ${scriptName} - please check for runaway jobs"
 
         # Read the status file in the job directory
 	[ ! -f ${statusFile} ] && 
+	cleanup_on_error && 
 	print_message "Status file missing from job directory" &&
-	print_error "Terminating ${scriptName} - submitted job with id `get_jobid` will not be stopped"
+	print_error "Terminating ${scriptName} - submitted job with $QUEUE id $(get_jobid) may still be queued/running"
+
+	# Lock others from changing external values
+	apply_lock ${lockFileA}
 
 	# Perform spinlock to try to avoid race condition with status
-	# updates from multiple sources
-	while [[ -f ${spinLockFile} ]]
-	do
-	    sleep 1
-	done
+	# and autoruns updates from multiple sources
+	# Wait till others have finished
+	enter_spin_lock ${lockFileB}
 
         # Read current job status
         local _status=$(get_status)
@@ -196,8 +254,6 @@ function autosubmit_jobs {
             # Attept to start new case
             # The the number of runs left
 	    local _autoRuns=$(get_autoruns)
-
-	    [[ -z $_autoRuns ]] && print_error "Error getting autoruns"
 
 	    if (( $_autoRuns > 0 )); then 
 
@@ -212,7 +268,7 @@ function autosubmit_jobs {
 		        # Job check string not found
 		        # Clean up and exit
 			cleanup_on_error
-			print_message "Previous job not completed correctly - terminating ${scriptName}!"
+			print_message "Previous job not completed correctly - terminating"
 			print_error "Remove ${jobCheckFile} and resubmit"
 
 		    fi
@@ -225,16 +281,20 @@ function autosubmit_jobs {
 
                 # Update the job number and remaining runs
 		local _jobNumber=$(( _jobNumber + 1 ))
-
-		print_message "Submitting job $_jobNumber"
-
 		_autoRuns=$(( _autoRuns - 1 ))
-		update_autoruns $_autoRuns
+		AUTORUNS=$(( _jobNumber + _autoRuns ))
 
+		update_autoruns $_autoRuns
 		update_status 1
 
 		local _jobID=$( $_submitJob )
 		update_jobid $_jobID
+
+		print_message "Submitted $QUEUE job ${_jobID} ($_jobNumber of $AUTORUNS)"
+		
+		# Unlock and sleep so that if others are spinning they
+		# have time to apply their lock
+		apply_unlock ${lockFileA} && sleep 1
 
 	    else
 
@@ -251,6 +311,12 @@ function autosubmit_jobs {
 	    cleanup_on_kill
 	    print_message "Received kill signal - exiting"
 	    exit 0
+
+	else 
+	
+            # Unlock and sleep so that if others are spinning they
+	    # have time to apply their lock
+	    apply_unlock ${lockFileA} && sleep 1
 
 	fi
 
@@ -288,19 +354,22 @@ function kill_jobs {
 	    ;;
     esac
 
+    # Spin till released by autosubmit_jobs
+    enter_spin_lock ${lockFileA}
     # Go ahead and apply the lock
-    apply_lock
+    apply_lock ${lockFileB}
 
     # Update autoruns to 0
     update_autoruns 0
 
     # Kill running job
-    $_killJob $(get_jobid) && print_message "Stopped submitted job $(get_jobid)"
+    $_killJob $(get_jobid) && print_message "Stopped submitted $QUEUE job $(get_jobid)"
 
+    # Update to kill status
     update_status 2
 
     # Now unlock 
-    apply_unlock
+    apply_unlock ${lockFileB}
 
     exit 0
 
@@ -321,12 +390,18 @@ jobCheckString="<null>"
 autoSubmitDir=".autosubmit"
 
 # Set autoruns and status files, etc
+autoSubmitJobsFile="${autoSubmitDir}/autosubmit_job"
 autoRunsFile="${autoSubmitDir}/autoruns"
 statusFile="${autoSubmitDir}/status"
 jobIDFile="${autoSubmitDir}/jobid"
 autoSubmitConfig="${autoSubmitDir}/config"
 
-spinLockFile="${autoSubmitDir}/lock"
+
+# Set lock files
+lockFileA="${autoSubmitDir}/lock.a"
+lockFileB="${autoSubmitDir}/lock.b"
+
+#Set lsf submission script
 lsfSubmitScript="${autoSubmitDir}/lsfsubmit.sh"
 
 NARGS=$#
@@ -373,11 +448,23 @@ case $CMD in
 	;;
 
     "kill")
+      
+        # Make sure autosubmit_jobs is actually running
+	check_autosubmit_jobs
+    
 	kill_jobs
 	;;
     "update")
 
 	shift
+
+        # Make sure autosubmit_jobs is actually running
+	check_autosubmit_jobs
+
+        # Spin till released by autosubmit_jobs
+        enter_spin_lock ${lockFileA}
+        # Go ahead and apply the lock
+        apply_lock ${lockFileB}
 	
 	arg="$1"
 	case "$arg" in
@@ -391,16 +478,21 @@ case $CMD in
 		update_status "$1"
 		;;
 	    *)
+		apply_unlock ${lockFileB}
 		print_error "update arguments specified incorrectly (see '${scriptName} help')"
 		;;
 	esac
 
+	apply_unlock ${lockFileB}
 	exit 0
 	;;
 
     "show")
 
 	shift
+    
+        # Make sure autosubmit_jobs is actually running
+        check_autosubmit_jobs
 	
 	arg="$1"
 	case "$arg" in
