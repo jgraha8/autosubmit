@@ -105,7 +105,7 @@ function create_lsf_submit_script {
     (echo '#!/bin/bash'
      echo "id=\$( bsub < ${jobSubmitScript} )"
      echo "echo \$? > ${lsfSubmitScript}.exit"
-     echo "echo \$id | cut -f2 -d ' '" > ${lsfSubmitScript}.id
+     echo "echo \$id | cut -f2 -d ' ' > ${lsfSubmitScript}.id"
      echo "sed 's/[^0-9]//g' ${lsfSubmitScript}.id"
      echo "rm -f ${lsfSubmitScript}.id") > ${lsfSubmitScript}
     chmod +x ${lsfSubmitScript}
