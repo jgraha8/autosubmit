@@ -54,7 +54,10 @@ function write_config_file {
 function pbs_submit {
     
     local _id=$(qsub "${jobSubmitScript}")
-    echo ${_id%%.*}
+    local _retval=$?
+    _id=${_id%%.*}
+    (( $_retval != 0 )) && _id=-1
+    echo $_id
 }
 
 function pbs_kill {
@@ -63,8 +66,11 @@ function pbs_kill {
 }
 
 function lsf_submit {
-    local _id=$( ${lsfSubmitFile} )
-    echo $_id    
+    local _id=$( ${lsfSubmitScript} )
+    local _retval=$(cat "${lsfSubmitScript}.exit")
+    rm -f "${lsfSubmitScript}.exit"
+    (( $_retval != 0 )) && _id=-1
+    echo $_id
 }
 
 function lsf_kill {
@@ -75,8 +81,10 @@ function lsf_kill {
 function create_lsf_submit_script {
     (echo '#!/bin/bash'
      echo "id=\$( bsub < ${jobSubmitScript} )"
-     echo "id=\$(echo \$id | cut -f2 -d ' ' | sed -i 's/[^0-9]//g' \)"
-     echo "\$id" ) > ${lsfSubmitScript}
+     echo "retval=\$?"
+     echo "echo \$retval > ${lsfSubmitScript}.exit"
+     echo "echo \$id | cut -f2 -d ' ' | sed -i 's/[^0-9]//g'") > ${lsfSubmitScript}
+    chmod +x ${lsfSubmitScript}
 }
 
 #######################################################################
@@ -205,7 +213,7 @@ function autosubmit_jobs {
 	"lsf"|"LSF")
 	    QUEUE="LSF"
             local _submitJob=lsf_submit
-	    create_lsf_submit_file
+	    create_lsf_submit_script
 	    ;;
 	*)
 	    print_error "Specified queue not supported"
@@ -288,6 +296,10 @@ function autosubmit_jobs {
 		update_status 1
 
 		local _jobID=$( $_submitJob )
+		[[ $_jobID -eq -1 || -z $_jobID ]] && 
+		cleanup_on_error &&
+		print_error "Unable to start $QUEUE job"
+
 		update_jobid $_jobID
 
 		print_message "Submitted $QUEUE job ${_jobID} ($_jobNumber of $AUTORUNS)"
