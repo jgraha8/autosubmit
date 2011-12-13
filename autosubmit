@@ -26,7 +26,7 @@
 SCRIPTNAME=$(basename $0)
 AUTOSUBMIT=$(readlink -f $0)
 SLEEPTIME=10
-
+VERSION=cvs
 function print_usage {
     echo "Usage: $SCRIPTNAME <command> [command-args]"
     echo "Commands:"
@@ -55,9 +55,15 @@ function print_usage {
     echo "    Show information regarding current series of jobs"
     echo "    -r                      See number of remaining jobs to be resubmitted"
     echo "    -j                      Get the current job ID that is queued/running"
+    echo " "
+    echo "  version                   Display version information"
     exit 0
 }
 
+function print_version {
+    echo ${SCRIPTNAME} ${VERSION}
+    exit 0
+}
 function print_message {
     echo -e "$1"
 }
@@ -194,7 +200,7 @@ function update_autoruns {
 
 
 ######################################################################
-# SPINLOCK FUNCTIONS                                                 #
+# LOCK FUNCTIONS                                                     #
 ######################################################################
 
 function enter_spinlock {
@@ -569,6 +575,10 @@ case $CMD in
     "help"|"-h")
 	print_usage
         ;;
+    
+    "version")
+	print_version
+	;;
 
      *) 
          print_usage
