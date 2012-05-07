@@ -28,15 +28,14 @@ AUTOSUBMIT=$(readlink -f $0)
 SLEEPTIME=10
 VERSION=cvs
 function print_usage {
-    echo "Usage: $SCRIPTNAME <command> [options] [<args>]"
+    echo "Usage: $SCRIPTNAME <command> [options] [<arguments>]"
     echo "Commands:"
-    echo "  submit [options] <job script> <validation file> <validation string>"
-    echo 
-    echo "    Submit jobs and setup automatic resubmission"
-    echo "      Options:"
-    echo "        -r <runs>               Number of jobs to run (default 10)"
-    echo "        -q <queue type>         Type of queue that jobs will be submitted to. Supported ones"
-    echo "                                PBS (or pbs) and LSF (or lsf) (default pbs)"
+    echo "  submit [options] <arguments>  Submit jobs and setup automatic resubmission"
+    echo "    Options:" 
+    echo "      -r <runs>                 Number of jobs to run (default 10)"
+    echo "      -q <queue type>           Type of queue that jobs will be submitted to. Supported ones:"
+    echo "                                {PBS|pbs} and {LSF|lsf} (default pbs)"
+    echo "    Arguments (all requried):"
     echo "      <job script>              Job script to be sent to queue"
     echo "      <validation file>         File that contains a message upon successful completion of the job"
     echo "      <valdiation string>       String or message that should be contained in the"
@@ -44,18 +43,16 @@ function print_usage {
     echo 
     echo "  kill                          Kill current submitted job and all subsequent submissions"
     echo 
-    echo "  update <arg>"
-    echo "    Update information regarding current series of jobs" 
-    echo "      Arugments:"
-    echo "        -r <runs>               Remaining number of runs to resubmit"
-    echo "        -s <status>             Specify status running jobs (used for kill and job completions signal)"
+    echo "  update <argument>             Update information regarding current series of jobs" 
+    echo "    Arguments:"
+    echo "      -r <runs>                 Remaining number of runs to resubmit"
+    echo "      -s {0|1|2}                Specify status of running jobs (used for kill and job completions signals)"
     echo "                                Don't use this option unless you know what you are doing"
     echo 
-    echo "  show <arg>"
-    echo "    Show information regarding current series of jobs"
-    echo "      Arguments:"
-    echo "        -r                      See number of remaining jobs to be resubmitted"
-    echo "        -j                      Get the current job ID that is queued/running"
+    echo "  show <argument>               Show information regarding current series of jobs"
+    echo "    Arguments:"
+    echo "      -r                        See number of remaining jobs to be resubmitted"
+    echo "      -j                        Get the current job ID that is queued/running"
     echo
     echo "  version                       Display version information"
     exit 0
@@ -276,6 +273,8 @@ function autosubmit_jobs {
 	    ;;
     esac
 
+    # Cleanup old status update in case of bad cleanup on exit
+    remove_status_update
     # Append autosubmit status update to job script 
     append_status_update
     # Initialize autoruns file
@@ -497,7 +496,6 @@ case $CMD in
 
 	done
 
-	echo $#
 	# Check remaining number of arguments
 	(( $# != 3 )) && print_error "submit arguments specified incorrectly (see '${SCRIPTNAME} help')"
 	
@@ -505,8 +503,7 @@ case $CMD in
 	jobCheckFile="$2"
 	jobCheckString="$3"
 
-	echo "-r $autoRuns -q $queueType $jobSubmitScript $jobCheckFile $jobCheckString"
-	echo autosubmit_jobs
+	autosubmit_jobs
 	;;
 
     "kill")
@@ -531,10 +528,12 @@ case $CMD in
 		
 	    "-r")
 		shift
+		[[ -z "$1" ]] && exit_spinlock && print_error "please specify updated number of autoruns"
 		update_autoruns "$1"
 		;;
 	    "-s")
 		shift
+		[[ -z "$1" ]] && exit_spinlock && print_error "please specify updated status"
 		update_status "$1"
 		;;
 	    *)
