@@ -28,35 +28,36 @@ AUTOSUBMIT=$(readlink -f $0)
 SLEEPTIME=10
 VERSION=cvs
 function print_usage {
-    echo "Usage: $SCRIPTNAME <command> [command-args]"
+    echo "Usage: $SCRIPTNAME <command> [options] [<args>]"
     echo "Commands:"
-    echo "  submit -r <runs> -q <queue type> <job script> <validation file> <validation string>"
-    echo " "
+    echo "  submit [options] <job script> <validation file> <validation string>"
+    echo 
     echo "    Submit jobs and setup automatic resubmission"
-    echo "    -r <runs>               Number of jobs to run"
-    echo "    -q <queue type>         Type of queue that jobs will be submitted to. Supported ones"
-    echo "                            PBS (or pbs) and LSF (or lsf)"
-    echo "    <job script>            Job script to be sent to queue"
-    echo "    <validation file>       File that contains a message upon successful completion of the job"
-    echo "    <valdiation string>     String or message that should be contained in the"
-    echo "                            <validation file> upon successfull completion of the job"
-    echo " "
-    echo "  kill                      Kill current submitted job and all subsequent submissions"
-    echo " "
-    echo "  update -r <runs>"
-    echo " "
+    echo "      Options:"
+    echo "        -r <runs>               Number of jobs to run (default 10)"
+    echo "        -q <queue type>         Type of queue that jobs will be submitted to. Supported ones"
+    echo "                                PBS (or pbs) and LSF (or lsf) (default pbs)"
+    echo "      <job script>              Job script to be sent to queue"
+    echo "      <validation file>         File that contains a message upon successful completion of the job"
+    echo "      <valdiation string>       String or message that should be contained in the"
+    echo "                                <validation file> upon successfull completion of the job"
+    echo 
+    echo "  kill                          Kill current submitted job and all subsequent submissions"
+    echo 
+    echo "  update <arg>"
     echo "    Update information regarding current series of jobs" 
-    echo "    -r <runs>               Remaining number of runs to resubmit"
-    echo "    -s <status>             Specify status running jobs (used for kill and job completions signal)"
-    echo "                            Don't use this option unless you know what you are doing"
-    echo " "
-    echo "  show  { -r | -j }"
-    echo " "
+    echo "      Arugments:"
+    echo "        -r <runs>               Remaining number of runs to resubmit"
+    echo "        -s <status>             Specify status running jobs (used for kill and job completions signal)"
+    echo "                                Don't use this option unless you know what you are doing"
+    echo 
+    echo "  show <arg>"
     echo "    Show information regarding current series of jobs"
-    echo "    -r                      See number of remaining jobs to be resubmitted"
-    echo "    -j                      Get the current job ID that is queued/running"
-    echo " "
-    echo "  version                   Display version information"
+    echo "      Arguments:"
+    echo "        -r                      See number of remaining jobs to be resubmitted"
+    echo "        -j                      Get the current job ID that is queued/running"
+    echo
+    echo "  version                       Display version information"
     exit 0
 }
 
@@ -440,7 +441,7 @@ function kill_jobs {
 ######################################################################
 # Initialize global variables
 ######################################################################
-autoRuns=0
+autoRuns=10
 queueType="pbs"
 
 jobSubmitScript="<null>"
@@ -461,7 +462,7 @@ autoSubmitConfig="${autoSubmitDir}/config"
 # Set lock file
 spinLockFile="${autoSubmitDir}/lock"
 
-#Set lsf submission script
+# Set lsf submission script
 lsfSubmitScript="${autoSubmitDir}/lsfsubmit.sh"
 
 NARGS=$#
@@ -473,30 +474,30 @@ case $CMD in
 
     "submit")
 
-	shift
-	
-	for (( i=0; i<2; i++ ))
+	# Obtain all options
+	declare -i _haveOpts=1
+	while (( _haveOpts == 1 ))
 	do
-	    arg="$1"
+	    arg="$2"
 	    case "$arg" in
 		
 		"-r")
-		    shift
+		    shift 2
 		    autoRuns="$1"
 		    ;;
 		"-q")
-		    shift
+		    shift 2
 		    queueType="$1"
 		    ;;
 		*)
-		    print_error "submit arguments specified incorrectly (see '${SCRIPTNAME} help')"
+		    shift
+		    _haveOpts=0
 		    ;;
 	    esac
 
-	    shift
-
 	done
-	
+
+	echo $#
 	# Check remaining number of arguments
 	(( $# != 3 )) && print_error "submit arguments specified incorrectly (see '${SCRIPTNAME} help')"
 	
@@ -504,16 +505,17 @@ case $CMD in
 	jobCheckFile="$2"
 	jobCheckString="$3"
 
-	autosubmit_jobs
+	echo "-r $autoRuns -q $queueType $jobSubmitScript $jobCheckFile $jobCheckString"
+	echo autosubmit_jobs
 	;;
 
     "kill")
       
         # Make sure autosubmit_jobs is actually running
-	check_autosubmit_jobs
-    
+	check_autosubmit_jobs    
 	kill_jobs
 	;;
+
     "update")
 
 	shift
