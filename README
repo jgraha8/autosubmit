@@ -19,7 +19,7 @@ submitting a job to the queuing system, autosubmit waits to recieve a message
 indicating a change in the job status. This change is either signaled by the
 queuing system that the job is complete or it is a kill signal triggered by the
 user. If the job is complete then it will check that there are remaining jobs to
-submit and resubmit if necessary. If a kill signal is recieved then the current
+submit and resubmit, if necessary. If a kill signal is recieved then the current
 job will be deleted from the queue and the robot process is exited.
 
 A key feature of autosubmit is to ensure that job that have not completed
@@ -30,7 +30,7 @@ signals that the job is complete, but no successful completion message from your
 program is found, then the job is not resubmitted and the robot process is
 terminated.
 
-Once the set of jobs are submitted, the user can interact with the robot process
+Once the set of jobs is submitted, the user can interact with the robot process
 such as modifying the number of remaining jobs or status of the current job. The
 number of remaining runs and job id of the queuing system can also be
 obtained. To ensure the safety of the messages shared between the multiple
@@ -58,7 +58,7 @@ the script ordinarily used to submit to the queuing system. In this example
 
   nohup autosubmit submit myprog.job myprog.out "Simulation Complete" > autosubmit.out &
 
-A couple of things to note. First we are launching the robot process which must
+A couple of things to note. First, we are launching the robot process which must
 be run in the background so hence the stdout redirection and the "&" at the end
 of the line. Also we launch with "nohup" so that you can log out of the system
 with out terminating the robot process. By default autosubmit will setup 10 job
@@ -77,7 +77,7 @@ would be used. For launching on a system using LSF instead of PBS execute:
 
 After the robot process is started, you can interact with running jobs by using
 autosubmit from the directory that the jobs were submitted. To check the number
-of remaining jobs with:
+of remaining jobs run:
 
   autosubmit show -r
 
@@ -91,13 +91,15 @@ To modify the number of remaining jobs to resubmit execute:
 
 where is N is the number of resubmissions. autosubmit has a "status" command,
 but in general is not used directly by the user. It does come into play when
-signaling job completions from the queuing system and kill signal
-from the user. To send the kill signal to the robot process to terminate and
-cleanup all jobs, execute:
+signaling job completions from the queuing system and kill signal from the user
+throught the "kill" command. To send the kill signal to the robot process to
+terminate and cleanup all jobs, execute the "kill" command as:
 
   autosubmit kill
 
-All of the options and help information is obtained by running autosubmit with no arguments. 
+All of the options and help information is obtained by running:
+  
+   autosubmit help
 
 That's it. Fairly simple. Happy computing.
 
