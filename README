@@ -89,11 +89,11 @@ To modify the number of remaining jobs to resubmit execute:
 
   autosubmit update -r N
 
-where is N is the number of resubmissions. autosubmit has a "status" command,
-but in general is not used directly by the user. It does come into play when
-signaling job completions from the queuing system and kill signal from the user
-throught the "kill" command. To send the kill signal to the robot process to
-terminate and cleanup all jobs, execute the "kill" command as:
+where is N is the number of resubmissions. autosubmit has a status update
+command, but in general is not used directly by the user. It does come into play
+when signaling job completions from the queuing system and kill signal from the
+user throught the "kill" command. To send the kill signal to the robot process
+to terminate and cleanup all jobs, execute the "kill" command as:
 
   autosubmit kill
 
