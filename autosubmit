@@ -1,10 +1,10 @@
 #!/bin/bash
-############################################################################
+################################################################################
 #
-#  autosubmit is a utility to automatically resubmit and manage jobs to
+#  autosubmit is a utility use to automatically resubmit and manage jobs within
 #  queuing systems.
 #
-#  Copyright (C) 2011  Jason Graham <jgraha8@gmail.com>
+#  Copyright (C) 2011, 2012  Jason Graham <jgraha8@gmail.com>
 #
 #  This file is part of autosubmit
 #
@@ -21,7 +21,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with autosubmit.  If not, see <http://www.gnu.org/licenses/>.
 #
-############################################################################
+################################################################################
 
 SCRIPTNAME=$(basename $0)
 AUTOSUBMIT=$(readlink -f $0)
@@ -55,6 +55,8 @@ function print_usage {
     echo "      -j                        Get the current job ID that is queued/running"
     echo
     echo "  version                       Display version information"
+    echo 
+    echo "  help                          Show this information"
     exit 0
 }
 
