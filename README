@@ -1,36 +1,105 @@
-Copyright (C) 2011 Jason Graham <jgraha8@gmail.com> 
+Copyright (C) 2011, 2012 Jason Graham <jgraha8@gmail.com> 
 See the end of the file for license conditions.
 
-=====================================================================
-                               SUMMARY
-=====================================================================
 
-autosubmit is a utility to automatically resubmit and manage jobs to
-queuing systems.
+================================================================================
+				    SUMMARY
+================================================================================
 
-More to come...
+autosubmit is a utility used to automatically resubmit and manage jobs within
+queuing systems. autosubmit monitors the status of your jobs and submits new
+jobs as they finish. It also allows for interaction with a set of jobs allowing
+the user to modify the number of remaining jobs, terminate the jobs, see the job
+id and other features. It has proven handy for overcoming short queue run-time
+limits where constant attention is required in order to reducing downtime.
 
+When submitting a set of jobs, autosubmit is launched as a process that is
+constantly monitoring the status of the jobs--this is the robot process. After
+submitting a job to the queuing system, autosubmit waits to recieve a message
+indicating a change in the job status. This change is either signaled by the
+queuing system that the job is complete or it is a kill signal triggered by the
+user. If the job is complete then it will check that there are remaining jobs to
+submit and resubmit if necessary. If a kill signal is recieved then the current
+job will be deleted from the queue and the robot process is exited.
 
-=====================================================================
-                           GETTING STARTED
-=====================================================================
+A key feature of autosubmit is to ensure that job that have not completed
+correctly do not get resubmitted. To accomplish this, it is required that your
+program write message to a file that states that it completed correctly. This
+can be any file and any unique message (i.e. string). If the queuing system
+signals that the job is complete, but no successful completion message from your
+program is found, then the job is not resubmitted and the robot process is
+terminated.
 
-For now see 'autosubmit help'
+Once the set of jobs are submitted, the user can interact with the robot process
+such as modifying the number of remaining jobs or status of the current job. The
+number of remaining runs and job id of the queuing system can also be
+obtained. To ensure the safety of the messages shared between the multiple
+process a set of spinlocks are used. This is to ensure that messages are not
+clobbered by other processes.
 
-More to come...
+autosubmit has be tested with PBS and LSF queuing systems. 
 
-=====================================================================
-                               TUTORIAL
-=====================================================================
+================================================================================
+				GETTING STARTED
+================================================================================
 
-----------------------------------------------------------------------
-                             BASIC USAGE
-----------------------------------------------------------------------
+The two primary modes of autosubmit are submitting a set of jobs and interacting
+with running jobs. Both of these tasks are discussed below.
 
-----------------------------------------------------------------------
-			    SOME OTHER STUFF
-----------------------------------------------------------------------
+--------------------------------------------------------------------------------
+				SUBMITTING JOBS
+--------------------------------------------------------------------------------
 
+To begin, we start by submitting a set of jobs for running the program "myprog"
+with the job submission script "myprog.job". The job submission script is simply
+the script ordinarily used to submit to the queuing system. In this example
+"myprog" will write to the file "myprog.out" the successful completion message
+"Simulation Complete". So to submit the set of jobs, execute:
+
+  nohup autosubmit submit myprog.job myprog.out "Simulation Complete" > autosubmit.out &
+
+A couple of things to note. First we are launching the robot process which must
+be run in the background so hence the stdout redirection and the "&" at the end
+of the line. Also we launch with "nohup" so that you can log out of the system
+with out terminating the robot process. By default autosubmit will setup 10 job
+submissions for the PBS queuing system. If you wanted to launch 20 jobs instead
+of the default then:
+
+  nohup autosubmit submit -r 20 myprog.job myprog.out "Simulation Complete" > autosubmit.out &
+
+would be used. For launching on a system using LSF instead of PBS execute:
+
+  nohup autosubmit submit -q lsf myprog.job myprog.out "Simulation Complete" > autosubmit.out &
+
+--------------------------------------------------------------------------------
+			     INTERACTING WITH JOBS
+--------------------------------------------------------------------------------
+
+After the robot process is started, you can interact with running jobs by using
+autosubmit from the directory that the jobs were submitted. To check the number
+of remaining jobs with:
+
+  autosubmit show -r
+
+Similarly the job id of the current job in the queuing system is obtained with:
+
+  autosubmit show -j 
+
+To modify the number of remaining jobs to resubmit execute:
+
+  autosubmit update -r N
+
+where is N is the number of resubmissions. autosubmit has a "status" command,
+but in general is not used directly by the user. It does come into play when
+signaling job completions from the queuing system and kill signal
+from the user. To send the kill signal to the robot process to terminate and
+cleanup all jobs, execute:
+
+  autosubmit kill
+
+All of the options and help information is obtained by running autosubmit with no arguments. 
+
+That's it. Fairly simple. Happy computing.
 
 
 This file is part of autosubmit
