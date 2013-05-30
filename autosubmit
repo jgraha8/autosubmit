@@ -1,10 +1,10 @@
 #!/bin/bash
 ################################################################################
 #
-#  autosubmit is a utility use to automatically resubmit and manage jobs within
+#  autosubmit is a utility used to automatically resubmit and manage jobs within
 #  queuing systems.
 #
-#  Copyright (C) 2011, 2012  Jason Graham <jgraha8@gmail.com>
+#  Copyright (C) 2011, 2012 Johns Hopkins University
 #
 #  This file is part of autosubmit
 #
@@ -20,6 +20,9 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with autosubmit.  If not, see <http://www.gnu.org/licenses/>.
+#
+#  Authors:
+#    Jason Graham <jgraha8@gmail.com>
 #
 ################################################################################
 
